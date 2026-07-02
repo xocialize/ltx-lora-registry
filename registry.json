@@ -92,7 +92,7 @@
       "id": "ingredients",
       "displayName": "Ingredients — reference-sheet consistency (Lightricks)",
       "kind": "ic",
-      "status": "pending-gate-acceptance",
+      "status": "verified-weights",
       "license": "LTX-2-community",
       "gatedDownload": true,
       "repo": "Lightricks/LTX-2.3-22b-IC-LoRA-Ingredients",
@@ -114,7 +114,13 @@
       ],
       "verification": {
         "date": "2026-07-02",
-        "note": "HF gate not yet accepted for xocialize — accept on the repo page, then run the header probe + --lora-gate. Card: rank 128, alpha 128, dev-base-trained (perceptual verify on distilled at P3)."
+        "headerDialect": "diffusers-PEFT (diffusion_model.*)",
+        "rank": 128,
+        "tensors": 960,
+        "targetsApplied": "480/480",
+        "audioBranch": false,
+        "loraGate": "PASS (on 0.833/off 0.99991/detach 1.0, finite)",
+        "note": "card says dev-base-trained — perceptual verify on distilled at P3"
       }
     },
     {

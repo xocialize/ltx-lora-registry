@@ -59,7 +59,7 @@ routes roles into the IC injection path. Adding an adapter = adding a JSON entry
   cross-modal attentions; downscale 1). IC path pending (P1–P3).
 - `cameraman-v2` — weights **PASS** (rank 64, 480/480, video-only). ⚠️ research-only license ⇒
   eval-only, license-gated.
-- `ingredients` — blocked on one-time HF gate acceptance for the `xocialize` account
-  (`gated: auto` — accept on the repo page, then run the recipe).
+- `ingredients` — weights **PASS** (rank 128, 480/480, video-only; dev-base-trained — perceptual
+  verify on distilled at P3). Gate accepted 2026-07-02.
 - Plain entries (`transition`, `omnicine`, `fantasy-anime`, `i2v-adapter`) — carried from v1,
   all previously gate-verified and live-validated in the test app.
