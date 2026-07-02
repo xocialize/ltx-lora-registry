@@ -107,11 +107,30 @@
         {
           "role": "reference_sheet",
           "media": "image",
-          "required": true,
+          "required": false,
+          "group": "sheet",
           "ingest": "loopedStillVideo",
-          "note": "ONE composite sheet (characters/props/locations as clean panels, black bg, no text); tiled to >=121 frames matching output length"
+          "note": "ONE finished composite sheet (clean panels, black bg, no text); tiled to >=121 frames matching output length. Alternative: provide subject_images and the app builds the sheet."
+        },
+        {
+          "role": "subject_images",
+          "media": "imageSet",
+          "maxCount": 6,
+          "required": false,
+          "group": "sheet",
+          "ingest": "sheetBuilder",
+          "note": "up to 6 character/prop images — composed into a sheet (native-aspect top-row panels, black gutters, built oversized ~1456x825 then downscaled); per-image descriptions feed the dual-part prompt"
+        },
+        {
+          "role": "location_image",
+          "media": "image",
+          "required": false,
+          "group": "sheet",
+          "ingest": "sheetBuilder",
+          "note": "optional full-width location band (~40% height) in the built sheet"
         }
       ],
+      "conditioningGroups": { "sheet": "oneOf: reference_sheet | (subject_images [+ location_image])" },
       "verification": {
         "date": "2026-07-02",
         "headerDialect": "diffusers-PEFT (diffusion_model.*)",

@@ -25,7 +25,8 @@ Per adapter — v1 fields unchanged (`id`, `displayName`, `repo`, `weightFile`, 
 | `stage2` | `clean` (detach LoRA + drop refs for the stage-2 refine — the oracle IC default) \| `keep` |
 | `surface` | which engine capability the adapter rides (`textToVideo`, later `videoUpscale`/`videoEdit`) |
 | `promptConvention` | id of a prompting template the enhancer can apply (e.g. Ingredients' dual-part format) |
-| `conditioning[]` | **declared attachment slots** — the generic surface. Each: `role` (free-form string the pipeline routes on), `media` (`video`/`audio`/`image`), `required`, `ingest` hint (`videoClip`/`audioTrack`/`loopedStillVideo`/`initImage`), `defaultStrength`, `note` (UI help text) |
+| `conditioning[]` | **declared attachment slots** — the generic surface. Each: `role` (free-form string the pipeline routes on), `media` (`video`/`audio`/`image`/`imageSet` + `maxCount`), `required`, `ingest` hint (`videoClip`/`audioTrack`/`loopedStillVideo`/`initImage`/`sheetBuilder`), optional `group` (slots sharing a group are alternatives — see `conditioningGroups`), `defaultStrength`, `note` (UI help text) |
+| `conditioningGroups` | human-readable `oneOf` semantics for grouped slots (e.g. ingredients: a finished `reference_sheet` OR `subject_images` the app composes via the sheet-builder ingest) |
 | `verification` | discovery/gate evidence: header dialect, rank, tensor/target counts, audio branch, `--lora-gate` result, date |
 
 **The `conditioning` array is the contract with the app:** the UI renders one picker per declared
