@@ -110,6 +110,8 @@
           "required": false,
           "group": "sheet",
           "ingest": "loopedStillVideo",
+          "describable": true,
+          "describeNote": "describe the sheet's elements (characters, props, location) — feeds the 'Reference sheet:' half of the prompt",
           "note": "ONE finished composite sheet (clean panels, black bg, no text); tiled to >=121 frames matching output length. Alternative: provide subject_images and the app builds the sheet."
         },
         {
