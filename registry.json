@@ -100,7 +100,7 @@
       "defaultStrength": 1.4,
       "trigger": "",
       "referenceDownscale": 1,
-      "stage2": "clean",
+      "stage2": "skip",
       "surface": "textToVideo",
       "promptConvention": "ingredients-dual-part",
       "conditioning": [
@@ -139,7 +139,8 @@
         "targetsApplied": "480/480",
         "audioBranch": false,
         "loraGate": "PASS (on 0.833/off 0.99991/detach 1.0, finite)",
-        "note": "card says dev-base-trained — perceptual verify on distilled at P3"
+        "note": "card says dev-base-trained — perceptual verify on distilled at P3",
+        "referenceUsage": "cross-checked vs Space ltx-community/ltx-2.3-ingredients-distilled (2026-07-02): distilled base + LoRA 1.4 fused, ONE-stage at target res (SKIP_STAGE_2), sheet as looped-still at gen res x121f, conditioning strength 1.0, prompt 'Reference sheet: {elements}\\n\\nGenerated video: {action}' (no panel labels), grid sheet composer 1536x896/16px contain-fit"
       }
     },
     {

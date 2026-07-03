@@ -22,7 +22,7 @@ Per adapter — v1 fields unchanged (`id`, `displayName`, `repo`, `weightFile`, 
 | `license` | per-adapter license id. **Non-permissive ⇒ `licenseGated: true`** — surfaced behind an explicit acknowledgment, never default-bundled |
 | `gatedDownload` | HF repo requires accepted terms + auth token to download |
 | `referenceDownscale` | from the safetensors header `reference_downscale_factor` (spatial position scale for reference tokens) |
-| `stage2` | `clean` (detach LoRA + drop refs for the stage-2 refine — the oracle IC default) \| `keep` |
+| `stage2` | `skip` (ONE stage at target res — the community-blessed Ingredients config) · `clean` (detach LoRA + drop refs for a stage-2 refine — the oracle two-stage default) · `keep` |
 | `surface` | which engine capability the adapter rides (`textToVideo`, later `videoUpscale`/`videoEdit`) |
 | `promptConvention` | id of a prompting template the enhancer can apply (e.g. Ingredients' dual-part format) |
 | `conditioning[]` | **declared attachment slots** — the generic surface. Each: `role` (free-form string the pipeline routes on), `media` (`video`/`audio`/`image`/`imageSet` + `maxCount`), `required`, `ingest` hint (`videoClip`/`audioTrack`/`loopedStillVideo`/`initImage`/`sheetBuilder`), optional `group` (slots sharing a group are alternatives — see `conditioningGroups`), `defaultStrength`, `note` (UI help text) |
