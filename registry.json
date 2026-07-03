@@ -95,7 +95,8 @@
         "targetsApplied": "1344/1344",
         "audioBranch": true,
         "loraGate": "PASS (on 0.809/off 0.99991/detach 1.0, finite)"
-      }
+      },
+      "audioReference": true
     },
     {
       "id": "ingredients",
@@ -141,7 +142,9 @@
           "note": "optional full-width location band (~40% height) in the built sheet"
         }
       ],
-      "conditioningGroups": { "sheet": "oneOf: reference_sheet | (subject_images [+ location_image])" },
+      "conditioningGroups": {
+        "sheet": "oneOf: reference_sheet | (subject_images [+ location_image])"
+      },
       "verification": {
         "date": "2026-07-02",
         "headerDialect": "diffusers-PEFT (diffusion_model.*)",
