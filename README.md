@@ -56,8 +56,8 @@ routes roles into the IC injection path. Adding an adapter = adding a JSON entry
 
 ## Current verification status (2026-07-02)
 
-- `lipdub` — weights **PASS** (rank 128, 1344/1344 targets incl. full audio branch + both
-  cross-modal attentions; downscale 1). IC path pending (P1–P3).
+- `lipdub` — **VERIFIED ✅** (2026-07-03): weights PASS (rank 128, 1344/1344 incl. full audio branch) + live gate
+  (lip-sync + identity + mux-path stt_verify WER 0.08; audio deliverable = actual dub per I7).
 - `cameraman-v2` — weights **PASS** (rank 64, 480/480, video-only). ⚠️ research-only license ⇒
   eval-only, license-gated.
 - `ingredients` — **VERIFIED ✅** (2026-07-03): weights PASS (rank 128, 480/480) + LIVE IC gate PASS
