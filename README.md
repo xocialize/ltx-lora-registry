@@ -61,10 +61,10 @@ routes roles into the IC injection path. Adding an adapter = adding a JSON entry
   text preserved across 121f, studio product-hero style, audio branch fired).
   ⚠️ repo LICENSE file is empty (`license: other`) — clarification requested from author
   2026-07-08; treated as unspecified-community meanwhile.
-- `sci-fi-cinema` (SOLRICKS) — weights **PASS** (2026-07-08): rank 16, 1632/1632 incl. full
-  audio branch (same recipe as product-ad), on 0.709 / detach 1.0. `pending-gate-acceptance`
-  until a live t2v perceptual pass (trigger `srx_scififilm` — the card table's `srx_scifilm`
-  is a typo per training metadata; default strength 0.85 from the card's 0.6–1.1 range).
+- `sci-fi-cinema` (SOLRICKS) — **VERIFIED ✅** (2026-07-08): weights PASS (rank 16, 1632/1632
+  incl. full audio branch, same recipe as product-ad) + live t2v perceptual pass (NEON TOKYO
+  2077 prompt: strong cyberpunk/neon grading, coherent aerial motion, audio branch fired).
+  Trigger `srx_scififilm` — the card table's `srx_scifilm` is a typo per training metadata.
   ⚠️ NO LICENSE file in repo (`license: other`) — same clarification posture as product-ad.
 
 - `lipdub` — **VERIFIED ✅** (2026-07-03): weights PASS (rank 128, 1344/1344 incl. full audio branch) + live gate
