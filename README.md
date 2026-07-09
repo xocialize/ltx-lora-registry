@@ -59,13 +59,14 @@ routes roles into the IC injection path. Adding an adapter = adding a JSON entry
 - `product-ad` (SOLRICKS) — **VERIFIED ✅** (2026-07-08): weights PASS (rank 16, 1632/1632 incl.
   full audio branch — first *plain* adapter with one) + live i2v perceptual pass (logo/label
   text preserved across 121f, studio product-hero style, audio branch fired).
-  ⚠️ repo LICENSE file is empty (`license: other`) — clarification requested from author
-  2026-07-08; treated as unspecified-community meanwhile.
+  License **RESOLVED 2026-07-09** → `LTX-2-community` (author confirmed in repo discussion #2;
+  LICENSE.txt added upstream) — permissive-allowlisted, no gate.
 - `sci-fi-cinema` (SOLRICKS) — **VERIFIED ✅** (2026-07-08): weights PASS (rank 16, 1632/1632
   incl. full audio branch, same recipe as product-ad) + live t2v perceptual pass (NEON TOKYO
   2077 prompt: strong cyberpunk/neon grading, coherent aerial motion, audio branch fired).
   Trigger `srx_scififilm` — the card table's `srx_scifilm` is a typo per training metadata.
-  ⚠️ NO LICENSE file in repo (`license: other`) — same clarification posture as product-ad.
+  License **RESOLVED 2026-07-09** → `LTX-2-community` (author's product-ad discussion #2
+  statement covers all their LTX-2.3 LoRA work; LICENSE.txt added upstream) — no gate.
 
 - `lipdub` — **VERIFIED ✅** (2026-07-03): weights PASS (rank 128, 1344/1344 incl. full audio branch) + live gate
   (lip-sync + identity + mux-path stt_verify WER 0.08; audio deliverable = actual dub per I7).
