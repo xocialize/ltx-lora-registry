@@ -54,7 +54,13 @@ routes roles into the IC injection path. Adding an adapter = adding a JSON entry
 - **Later (optional):** remote fetch with a pinned revision, so registry updates ship without a
   package release. Decide when entry churn justifies it.
 
-## Current verification status (2026-07-02)
+## Current verification status (2026-07-08)
+
+- `product-ad` (SOLRICKS) — weights **PASS** (2026-07-08): rank 16, 1632/1632 incl. full audio
+  branch (first *plain* adapter with one), on 0.783 / detach 1.0. `pending-gate-acceptance`
+  until a live perceptual pass (card recommends i2v @ 0.85, trigger `srx_commercial`).
+  ⚠️ repo LICENSE file is empty (`license: other`) — clarification requested from author
+  2026-07-08; treated as unspecified-community meanwhile.
 
 - `lipdub` — **VERIFIED ✅** (2026-07-03): weights PASS (rank 128, 1344/1344 incl. full audio branch) + live gate
   (lip-sync + identity + mux-path stt_verify WER 0.08; audio deliverable = actual dub per I7).
