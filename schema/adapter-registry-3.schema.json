@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/xocialize/ltx-lora-registry/main/schema/adapter-registry-3.schema.json",
+  "title": "Adapter registry, format 3",
+  "description": "One curated adapter (LoRA) registry format for image and video packages. Spec: FORMAT.md. Each entry is a superset of MLXToolKit's AdapterDescriptor (contract 1.53.0) and decodes as one. This schema is the authoring contract and is strict; readers must ignore unknown keys so later 3.x additions stay readable.",
+  "type": "object",
+  "required": ["format", "schemaVersion", "namespace", "title", "adapters"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "format": { "const": "adapter-registry" },
+    "schemaVersion": { "const": 3 },
+    "namespace": {
+      "$ref": "#/$defs/slug",
+      "description": "Registry namespace. An adapter's qualified id is '<namespace>:<id>'; catalogs that merge registries key on it."
+    },
+    "title": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "adapters": { "type": "array", "items": { "$ref": "#/$defs/adapter" } }
+  },
+  "$defs": {
+    "slug": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+    "role": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "baseModelKey": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*-[a-z0-9]+([.][a-z0-9]+)*$",
+      "description": "'<family>-<version>', e.g. ltx-2.3, ltx-2.5, flux2-klein-4b. Matched against AdapterSupport.baseModel."
+    },
+    "adapter": {
+      "type": "object",
+      "required": ["id", "title", "kind", "format", "baseModels", "capabilities", "source", "license",
+                   "licenseTerms", "defaultStrength", "status", "clearance"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/slug", "description": "Unique within the registry. Also names the adapter's cache file." },
+        "title": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["plain", "ic"], "description": "AdapterKind. plain: weight delta only. ic: reference-conditioned; has conditioning slots." },
+        "format": {
+          "$ref": "#/$defs/slug",
+          "description": "AdapterFormat: the safetensors key dialect a package's AdapterSupport.formats matches. Engine constants: diffusers-peft, kohya, bfl-fused."
+        },
+        "baseModels": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/baseModelKey" }
+        },
+        "capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["textToImage", "imageEdit", "textToVideo", "videoEdit"] },
+          "description": "Adapter-carrying MLXToolKit Capability raw values (AdapterSupport.carryingCapabilities)."
+        },
+        "source": { "$ref": "#/$defs/source" },
+        "license": {
+          "type": "string",
+          "pattern": "^(NOASSERTION|LicenseRef-[A-Za-z0-9.-]+|[A-Za-z0-9][A-Za-z0-9.+-]*)$",
+          "description": "SPDXLicense identifier: SPDX id, LicenseRef-* for non-SPDX licences, NOASSERTION when the author states none."
+        },
+        "licenseTerms": { "$ref": "#/$defs/licenseTerms" },
+        "defaultStrength": { "type": "number", "minimum": 0 },
+        "strengthRange": {
+          "type": "object",
+          "required": ["min", "max"],
+          "additionalProperties": false,
+          "properties": { "min": { "type": "number", "minimum": 0 }, "max": { "type": "number", "exclusiveMinimum": 0 } },
+          "description": "The range this adapter was validated over. Omit when unknown: the surface's AdapterSupport.strengthRange applies."
+        },
+        "conditioning": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/slot" },
+          "description": "Ordered conditioning slots; kind 'ic' only. Array order is the binding order."
+        },
+        "conditioningGroups": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/group" }
+        },
+        "footprint": {
+          "type": "object",
+          "required": ["residentBytes", "activationMultiplier"],
+          "additionalProperties": false,
+          "properties": {
+            "residentBytes": { "type": "integer", "minimum": 0 },
+            "activationMultiplier": { "type": "number", "minimum": 1 }
+          },
+          "description": "AdapterFootprint, measured with the package that applies it. Omitted for a plain adapter (the engine charges source.bytes). The engine refuses to register an ic adapter without one."
+        },
+        "status": {
+          "enum": ["verified", "gate-verified", "verified-weights", "pending-gate-acceptance", "eval-only", "candidate"]
+        },
+        "clearance": {
+          "type": "object",
+          "description": "Per base model in baseModels: how far the fit was established there.",
+          "additionalProperties": { "$ref": "#/$defs/clearance" }
+        },
+        "trigger": { "type": "string", "minLength": 1, "description": "Text the prompt must carry for the adapter to fire. Omit when there is none." },
+        "promptTemplate": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Canonical prompt. With no placeholder it is the default prompt when a request has none. Placeholders: {prompt}, {references}."
+        },
+        "promptConvention": { "$ref": "#/$defs/slug", "description": "Id of a prompting convention an enhancer profile can apply." },
+        "baseInputs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/baseInput" },
+          "description": "The base model's own request inputs the adapter is built for (e.g. the i2v init image). Not adapter conditioning."
+        },
+        "weights": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "rank": { "type": "integer", "minimum": 1 },
+            "alpha": { "type": "number" },
+            "audioBranch": { "type": "boolean", "description": "Joint audio-video adapters: carries audio-branch targets." }
+          }
+        },
+        "runtime": { "$ref": "#/$defs/runtime" },
+        "verification": {
+          "type": "object",
+          "description": "Gate, perceptual and footprint evidence. Open: families record what their gates measure. Consumers must not branch on it.",
+          "properties": {
+            "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+          }
+        }
+      }
+    },
+    "clearance": {
+      "type": "object",
+      "required": ["level"],
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "enum": ["perceptual", "mechanical", "declared"],
+          "description": "perceptual: output judged on this base. mechanical: weight gate only (targets resolve, output moves, detach exact); safe to offer, effect not judged. declared: upstream says so, not measured by us."
+        },
+        "variant": { "$ref": "#/$defs/slug", "description": "Checkpoint variant it was established on, e.g. distilled." },
+        "note": { "type": "string" }
+      }
+    },
+    "slot": {
+      "type": "object",
+      "required": ["role", "media", "required"],
+      "additionalProperties": false,
+      "properties": {
+        "role": { "$ref": "#/$defs/role" },
+        "media": { "enum": ["image", "video", "audio"], "description": "ConditioningMediaKind." },
+        "required": { "type": "boolean" },
+        "maxCount": { "type": "integer", "minimum": 1, "description": "How many inputs the role takes (an image set). Default 1." },
+        "group": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "Names a conditioningGroups entry." },
+        "ingest": { "type": "string", "minLength": 1, "description": "Package ingest hint (advisory)." },
+        "defaultStrength": { "type": "number", "minimum": 0, "description": "Reference conditioning strength when the request gives none." },
+        "describable": { "type": "boolean", "description": "The slot takes a caller-written description that feeds {references}." },
+        "describeNote": { "type": "string" },
+        "note": { "type": "string" }
+      }
+    },
+    "group": {
+      "type": "object",
+      "required": ["rule", "required", "alternatives"],
+      "additionalProperties": false,
+      "properties": {
+        "rule": { "const": "exactlyOne" },
+        "required": { "type": "boolean", "description": "Whether the request must satisfy one alternative." },
+        "alternatives": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "required": ["requires"],
+            "additionalProperties": false,
+            "properties": {
+              "requires": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/role" } },
+              "allows": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/role" } }
+            }
+          }
+        },
+        "note": { "type": "string" }
+      }
+    },
+    "baseInput": {
+      "type": "object",
+      "required": ["input", "required"],
+      "additionalProperties": false,
+      "properties": {
+        "input": { "enum": ["initImage"], "description": "initImage: the base model's i2v first frame (T2VRequest.initImage)." },
+        "required": { "type": "boolean" },
+        "note": { "type": "string" }
+      }
+    },
+    "licenseTerms": {
+      "type": "object",
+      "required": ["commercialUse", "gated"],
+      "additionalProperties": false,
+      "properties": {
+        "commercialUse": {
+          "enum": ["allowed", "conditional", "prohibited", "unknown"],
+          "description": "conditional: allowed under terms the notice states (e.g. a revenue cap). unknown: no licence asserted; a commercial-use policy must refuse it."
+        },
+        "gated": { "type": "boolean", "description": "The operator must accept the terms before the adapter is enabled. Not the same as source.gated." },
+        "notice": { "type": "string", "minLength": 1, "description": "Attribution or terms a host shows and carries in provenance." },
+        "url": { "type": "string", "pattern": "^https://" },
+        "note": { "type": "string" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["host", "repo", "revision", "file", "sha256", "bytes", "gated", "hashFrom"],
+      "additionalProperties": false,
+      "properties": {
+        "host": { "const": "huggingface" },
+        "repo": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$" },
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$", "description": "Full commit sha. Branch names are not pins." },
+        "file": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*//)(?!.*/$)(?!(.*/)?\\.\\.(/|$)).+$" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "bytes": { "type": "integer", "minimum": 1 },
+        "gated": { "type": "boolean", "description": "The hub repo is gated: downloading needs a token from an account that accepted its terms." },
+        "hashFrom": {
+          "enum": ["hub", "local"],
+          "description": "hub: sha256 is the hub's LFS oid at revision. local: hash of our verified copy whose size matches the hub at revision; the hub masks the oid without a token. Only gated sources may say local."
+        },
+        "upstream": { "type": "string", "minLength": 1, "description": "Where the bytes originate when repo is a mirror." },
+        "note": { "type": "string" }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "description": "Family-specific parameters the package reads. Each key belongs to one family; adding one is a 3.x minor change.",
+      "additionalProperties": false,
+      "properties": {
+        "referenceDownscale": { "type": "integer", "minimum": 1, "description": "ltx: spatial position scale for reference tokens (safetensors reference_downscale_factor)." },
+        "stage2": { "enum": ["skip", "clean", "keep"], "description": "ltx: IC stage policy." },
+        "audioReference": { "type": "boolean", "description": "ltx: the IC adapter also appends a reference audio stream (LipDub)." }
+      }
+    }
+  }
+}

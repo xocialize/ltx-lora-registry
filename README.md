@@ -1,78 +1,118 @@
 # ltx-lora-registry
 
-Source of truth for **LTX-2.3 adapter descriptions** consumed by `MLXLTX2` (the LTX package in
-mlx-engine-swift) and its host apps. The registry exists as its **own repo** so adapter schema and
-entries can be shaped, reviewed, and verified **before** app integration — apps ingest adapters as
-DATA; a new adapter must never require new request fields, bespoke UI, or per-adapter pipeline code.
+Two things live here:
 
-Design context: `ltx-2-mlx-swift/IC-LORA-PLAN.md` (the integration plan this schema serves) and
-`LORA-PLAN.md` (the plain/runtime LoRA capability, done).
+1. **The adapter registry format, version 3**: one curated LoRA registry format for image and video
+   packages (AB-D-0155, AB-A-0193). See [`FORMAT.md`](FORMAT.md) for the spec,
+   [`schema/adapter-registry-3.schema.json`](schema/adapter-registry-3.schema.json) for the schema,
+   and [`tools/adapter_registry.py`](tools/adapter_registry.py) for the validator, pinning and
+   converters.
+   - It merges this repo's v2 schema with FLUX.2 Klein's registry.
+   - Every entry decodes as the engine's `AdapterDescriptor` (contract 1.53.0, AB-A-0189).
+2. **The LTX-2 adapter registry**: [`registry.json`](registry.json) (namespace `ltx`). It is the source
+   of truth for the adapters `MLXLTX2` and `ltx-features-swift` offer, and it is already in format 3.
 
-## Schema v2 (additive over v1)
+Adapters are **data**: adding one means adding an entry, never new request fields, bespoke UI or
+per-adapter pipeline code.
 
-Top level: `schemaVersion`, `base` (the checkpoint family entries must match), `adapters[]`.
+## Layout
 
-Per adapter — v1 fields unchanged (`id`, `displayName`, `repo`, `weightFile`, `defaultStrength`,
-`trigger`, optional `input` for base-model x2v conditioning), plus:
-
-| Field | Meaning |
+| Path | What |
 |---|---|
-| `kind` | `plain` (weight delta only) \| `ic` (needs reference conditioning) |
-| `status` | `verified` · `verified-weights` (weights gate-passed, IC path pending) · `pending-gate-acceptance` · `eval-only` · `candidate` |
-| `license` | per-adapter license id. **Non-permissive ⇒ `licenseGated: true`** — surfaced behind an explicit acknowledgment, never default-bundled |
-| `gatedDownload` | HF repo requires accepted terms + auth token to download |
-| `referenceDownscale` | from the safetensors header `reference_downscale_factor` (spatial position scale for reference tokens) |
-| `stage2` | `skip` (ONE stage at target res — the community-blessed Ingredients config) · `clean` (detach LoRA + drop refs for a stage-2 refine — the oracle two-stage default) · `keep` |
-| `surface` | which engine capability the adapter rides (`textToVideo`, later `videoUpscale`/`videoEdit`) |
-| `promptConvention` | id of a prompting template the enhancer can apply (e.g. Ingredients' dual-part format) |
-| `conditioning[]` | **declared attachment slots** — the generic surface. Each: `role` (free-form string the pipeline routes on), `media` (`video`/`audio`/`image`/`imageSet` + `maxCount`), `required`, `ingest` hint (`videoClip`/`audioTrack`/`loopedStillVideo`/`initImage`/`sheetBuilder`), optional `group` (slots sharing a group are alternatives — see `conditioningGroups`), `defaultStrength`, `note` (UI help text) |
-| `conditioningGroups` | human-readable `oneOf` semantics for grouped slots (e.g. ingredients: a finished `reference_sheet` OR `subject_images` the app composes via the sheet-builder ingest) |
-| `verification` | discovery/gate evidence: header dialect, rank, tensor/target counts, audio branch, `--lora-gate` result, date |
+| `FORMAT.md` | The format spec, the legacy mapping, and how the engine uses it (AB-A-0189). |
+| `schema/adapter-registry-3.schema.json` | JSON Schema 2020-12, strict (the authoring contract). |
+| `registry.json` | LTX-2 adapters, format 3, every source pinned to a commit and a sha256. |
+| `examples/flux2-klein-4b.json` | Klein's eight adapters converted and pinned. **mlx-image owns that data**; this copy proves the format fits image adapters and feeds the tests. |
+| `dist/registry.v2.json` | `registry.json` projected onto v2, for the vendored copies whose decoders haven't moved (see below). Generated; the tests fail if it is stale. |
+| `tools/adapter_registry.py` | `validate [--remote]`, `pin`, `convert ltx-v2|klein-v1`, `export ltx-v2|klein-v1`. Standard library only. |
+| `tools/migrations/` | The v2 → 3 migration, with every deliberate data change and its reason. |
+| `tests/` | Offline tests: schema, rules, poison cases, the `AdapterDescriptor` shape, legacy round-trips, projection freshness. |
 
-**The `conditioning` array is the contract with the app:** the UI renders one picker per declared
-slot (by `media`), shows `note` as help text, and submits role-tagged attachments. The package
-routes roles into the IC injection path. Adding an adapter = adding a JSON entry.
+```bash
+python3 -I tests/test_adapter_registry.py
+python3 -I tools/adapter_registry.py validate --remote registry.json   # needs the network; before a release
+```
 
-## Evaluation recipe (run before flipping any entry to `verified*`)
+## Consumption
 
-1. **Header probe** (no download of the full file needed beyond the header, but we cache the file
-   anyway): parse the safetensors header — dialect (`diffusion_model.*` diffusers-PEFT expected),
-   rank (min dim of any `lora_A`), block coverage (want 48), audio-branch keys (joint-AV LoRA),
-   `__metadata__.reference_downscale_factor`.
-2. **Shape/key fit:** `swift run -c release RunLTX2 --lora-gate <file>` in `ltx-2-mlx-swift` —
-   want `targetsApplied` = all pairs, `finite=yes`, `detach cosine 1.0`. This proves the weight
-   half on the real 22b distilled DiT regardless of `kind`.
-3. **IC adapters additionally:** perceptual e2e once the injection path lands (IC-LORA-PLAN P3) —
-   weights-verified entries carry `status: verified-weights` until then.
-4. Record everything in the entry's `verification` block. Weight files cache at
-   `/Volumes/DEV_ARCHIVE/models/loras/` (dev) — the app's `LoRACache` lazy-downloads per entry.
+- **Packages vendor a copy.** `MLXLTX2` (`Sources/MLXLTX2/Resources/ltx-lora-registry.json`) and
+  `ltx-features-swift` (`Sources/LTXFeatureCore/Resources/registry.json`) still decode **v2**.
+  - Until they read format 3, sync them from `dist/registry.v2.json`, never from `registry.json`.
+  - The projection carries no revision or hash, so those packages still download `resolve/main`.
+    Pinned, hash-checked fetches arrive with the engine-managed materialisation of AB-A-0189.
+- **The engine and runtime** (L1/L3) read format 3 directly: entries decode as `AdapterDescriptor`,
+  and an `AdapterRef {id, strength}` resolves through the qualified id `ltx:<id>` to `source`.
 
-## Consumption model
+## Status (2026-10-19)
 
-- **Now:** `MLXLTX2` bundles a vendored copy (`Sources/MLXLTX2/Resources/ltx-lora-registry.json`).
-  This repo is the editing/review surface; sync the vendored copy on change (script TBD).
-- **Later (optional):** remote fetch with a pinned revision, so registry updates ship without a
-  package release. Decide when entry churn justifies it.
+All ten sources are pinned.
+- **Eight** carry the hub's own LFS sha256, and it equals the copy we gated (`hashFrom: hub`).
+- **Two** gated Lightricks repos (`ingredients`, `lipdub`) mask the oid without a token. They carry
+  our verified copy's hash; the size matches the hub at the pinned commit (`hashFrom: local`).
+  `pin --token-file` confirms them.
 
-## Current verification status (2026-07-08)
+| id | kind | status | 2.3 | 2.5 | licence | notes |
+|---|---|---|---|---|---|---|
+| transition | plain | verified | perceptual | mechanical | Apache-2.0 | rank 32, partial audio branch |
+| omnicine | plain | verified | perceptual | mechanical | Apache-2.0 | rank 128, audio branch |
+| fantasy-anime | plain | verified | perceptual | mechanical | NOASSERTION | rank 32 |
+| i2v-adapter | plain | verified | perceptual | mechanical | NOASSERTION | rank 256; built for the base model's init image (`baseInputs`) |
+| product-ad | plain | verified | perceptual | mechanical | LTX-2 Community | rank 16, audio branch |
+| sci-fi-cinema | plain | verified | perceptual | mechanical | LTX-2 Community | rank 16, audio branch; trigger `srx_scififilm` (card typo `srx_scifilm`) |
+| lipdub | ic | verified | perceptual | mechanical | LTX-2 Community | **repo renamed upstream to `…-DubIt`** (see below); footprint owed |
+| ingredients | ic | verified | perceptual | **perceptual** | LTX-2 Community | live IC fixture passed on 2.5 (2026-09-02); footprint ×1.64 activation |
+| union-control | ic | gate-verified | perceptual (canny) | mechanical | LTX-2 Community | pose and depth fixtures owed (AB-T-0007); hub no longer gated; footprint owed |
+| cameraman-v2 | ic | eval-only | perceptual | — | research only | licence-gated forever; footprint owed |
 
-- `product-ad` (SOLRICKS) — **VERIFIED ✅** (2026-07-08): weights PASS (rank 16, 1632/1632 incl.
-  full audio branch — first *plain* adapter with one) + live i2v perceptual pass (logo/label
-  text preserved across 121f, studio product-hero style, audio branch fired).
-  License **RESOLVED 2026-07-09** → `LTX-2-community` (author confirmed in repo discussion #2;
-  LICENSE.txt added upstream) — permissive-allowlisted, no gate.
-- `sci-fi-cinema` (SOLRICKS) — **VERIFIED ✅** (2026-07-08): weights PASS (rank 16, 1632/1632
-  incl. full audio branch, same recipe as product-ad) + live t2v perceptual pass (NEON TOKYO
-  2077 prompt: strong cyberpunk/neon grading, coherent aerial motion, audio branch fired).
-  Trigger `srx_scififilm` — the card table's `srx_scifilm` is a typo per training metadata.
-  License **RESOLVED 2026-07-09** → `LTX-2-community` (author's product-ad discussion #2
-  statement covers all their LTX-2.3 LoRA work; LICENSE.txt added upstream) — no gate.
+**IC footprints.** The engine registers an `ic` adapter only with a measured
+`footprint.activationMultiplier`.
+- **Ingredients** has one: ×1.64. It comes from the 2.5 fixture run against the same harness's
+  no-adapter control arm (see `verification.footprint`).
+- **LipDub, Union-Control and Cameraman** still need a matched run, and `validate` notes each one.
 
-- `lipdub` — **VERIFIED ✅** (2026-07-03): weights PASS (rank 128, 1344/1344 incl. full audio branch) + live gate
-  (lip-sync + identity + mux-path stt_verify WER 0.08; audio deliverable = actual dub per I7).
-- `cameraman-v2` — weights **PASS** (rank 64, 480/480, video-only). ⚠️ research-only license ⇒
-  eval-only, license-gated.
-- `ingredients` — **VERIFIED ✅** (2026-07-03): weights PASS (rank 128, 480/480) + LIVE IC gate PASS
-  (IC-P3-FIXTURE: identity transfer strong, no bleed, audio synced; dev-base-trained adapter confirmed working on distilled).
-- Plain entries (`transition`, `omnicine`, `fantasy-anime`, `i2v-adapter`) — carried from v1,
-  all previously gate-verified and live-validated in the test app.
+**Deliberate data changes in the migration** (`tools/migrations/2026-10-19-v2-to-v3.py`):
+- **LipDub → DubIt.** On 2026-08-02 Lightricks renamed both the repo
+  (`Lightricks/LTX-2.3-22b-IC-LoRA-LipDub` → `…-DubIt`) and the file (`…-lipdub-0.9` → `…-dubit-0.9`).
+  - The v2 `resolve/main` URL no longer serves the weights, so a fresh install of the vendored v2
+    registries can't fetch LipDub; existing caches are unaffected.
+  - The dubit file is byte-for-byte the same size as our gated copy, and the card still names the old
+    file. Its hash is unconfirmed because the repo is gated.
+- **Transition's licence** is Apache-2.0: its card has declared it since the first upload. v2 recorded
+  it as unspecified.
+- **Union-Control** is no longer gated on the hub (`source.gated: false`).
+- **Licences without an assertion** (`fantasy-anime`, `i2v-adapter`) are `NOASSERTION` /
+  `commercialUse: unknown`: still offered, but a commercial-use policy refuses them.
+
+## Evaluation recipe (before an entry's status becomes `verified*`)
+
+1. **Header probe:** the safetensors header gives:
+   - the dialect (`diffusion_model.*` PEFT expected → `format: diffusers-peft`);
+   - the rank (min dim of any `lora_A`);
+   - block coverage (want 48);
+   - audio-branch keys;
+   - `__metadata__.reference_downscale_factor`.
+
+   `pin --local-dir` fills `format` and `weights` from a local copy.
+2. **Shape and key fit:** run `swift run -c release RunLTX2 --lora-gate <file>` in `ltx-2-mlx-swift`.
+   You want:
+   - `targetsApplied` covering all pairs;
+   - `finite=yes`;
+   - detach cosine 1.0.
+
+   That proves the weight half on the real DiT, whatever the `kind`. For 2.5, `--lora-gate25` earns
+   `clearance` level `mechanical`.
+3. **IC adapters** also need:
+   - a perceptual end-to-end run, before level `perceptual`;
+   - a `footprint`: run `--ic-spot25` with and without the adapter (`LTX_IC_BASE=1`) at one geometry.
+     `activationMultiplier` is the ratio of the two `act` figures, rounded up.
+4. **Record and pin.** Record the evidence in `verification`. Pin the source with `pin`, then run
+   `validate --remote`.
+
+Weights cache at `/Volumes/Satechi/Models/ltx-lora-cache/` (dev), id-named.
+
+## History
+
+- **v1:** flat entries, `resolve/main`.
+- **v2:** IC slots, `clearedFamilies`; tag `v0.1.0`.
+- **Format 3:** this tree, tag `v0.2.0`. The last v2 document is kept as
+  `tests/fixtures/ltx-v2-2026-09-01.json`.
