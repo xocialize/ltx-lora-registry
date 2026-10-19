@@ -7,7 +7,8 @@ Two things live here:
    [`schema/adapter-registry-3.schema.json`](schema/adapter-registry-3.schema.json) for the schema,
    and [`tools/adapter_registry.py`](tools/adapter_registry.py) for the validator, pinning and
    converters.
-   - It merges this repo's v2 schema with FLUX.2 Klein's registry.
+   - It merges this repo's v2 schema with FLUX.2 Klein's registry. Klein's format-3 registry lives with
+     its package: `registry/flux2-klein-4b.json` in `xocialize/flux2-klein-swift` (mlx-image).
    - Every entry decodes as the engine's `AdapterDescriptor` (contract 1.53.0, AB-A-0189). From
      contract 1.55.0 (mlx-engine-swift v0.70.0) the engine also enforces `conditioningGroups`.
 2. **The LTX-2 adapter registry**: [`registry.json`](registry.json) (namespace `ltx`). It is the source
@@ -23,15 +24,14 @@ per-adapter pipeline code.
 | `FORMAT.md` | The format spec, the legacy mapping, and how the engine uses it (AB-A-0189). |
 | `schema/adapter-registry-3.schema.json` | JSON Schema 2020-12, strict (the authoring contract). |
 | `registry.json` | LTX-2 adapters, format 3, every source pinned to a commit and a sha256. |
-| `examples/flux2-klein-4b.json` | Klein's eight adapters converted and pinned. **mlx-image owns that data**; this copy proves the format fits image adapters and feeds the tests. |
 | `dist/registry.v2.json` | `registry.json` projected onto v2, for the vendored copies whose decoders haven't moved (see below). Generated; the tests fail if it is stale. |
 | `tools/adapter_registry.py` | `validate [--remote]`, `pin`, `convert ltx-v2|klein-v1`, `export ltx-v2|klein-v1`. Standard library only. |
 | `tools/migrations/` | The v2 → 3 migration, with every deliberate data change and its reason. |
-| `tests/` | Offline tests: schema, rules, poison cases, the `AdapterDescriptor` shape, legacy round-trips, projection freshness. |
+| `tests/` | Offline tests: schema, rules, poison cases, the safetensors header check, the `AdapterDescriptor` shape, legacy round-trips (LTX v2 and Klein v1 fixtures), projection freshness. Set `ADAPTER_REGISTRIES` to check other format-3 files too. |
 
 ```bash
 python3 -I tests/test_adapter_registry.py
-python3 -I tools/adapter_registry.py validate --remote registry.json   # needs the network; before a release
+python3 -I tools/adapter_registry.py validate --remote registry.json --local-dir /Volumes/Satechi/Models/ltx-lora-cache   # network; before a release
 ```
 
 ## Consumption

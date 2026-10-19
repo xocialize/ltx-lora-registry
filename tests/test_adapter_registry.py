@@ -5,9 +5,9 @@ The hub-side check (`validate --remote`) needs the network and is run by hand be
 """
 
 import copy
-import glob
 import json
 import os
+import struct
 import sys
 import unittest
 
@@ -21,8 +21,9 @@ def load(rel):
         return json.load(f)
 
 
-REGISTRIES = ["registry.json"] + sorted(
-    os.path.relpath(p, ROOT) for p in glob.glob(os.path.join(ROOT, "examples", "*.json")))
+# Other registries in format 3 (e.g. flux2-klein-swift's registry/flux2-klein-4b.json) are checked
+# too when listed in ADAPTER_REGISTRIES (os.pathsep-separated absolute paths).
+REGISTRIES = ["registry.json"] + [p for p in os.environ.get("ADAPTER_REGISTRIES", "").split(os.pathsep) if p]
 
 
 class Registries(unittest.TestCase):
@@ -36,6 +37,15 @@ class Registries(unittest.TestCase):
         spaces = [load(rel)["namespace"] for rel in REGISTRIES]
         self.assertEqual(len(spaces), len(set(spaces)))
 
+    def test_the_klein_fixture_converts_to_valid_format3(self):
+        # Klein's registry lives in flux2-klein-swift; the v1 fixture keeps the image side of the
+        # format under test here. Pinning needs the network, so give the converted sources a
+        # placeholder pin of the right shape.
+        doc = ar.from_klein_v1(load("tests/fixtures/klein-v1-2026-10-19.json"))
+        for a in doc["adapters"]:
+            a["source"].update(revision="0" * 40, sha256="0" * 64, bytes=1, hashFrom="hub")
+        self.assertEqual(ar.validate_doc(doc), [])
+
     def test_projection_is_current(self):
         # dist/registry.v2.json is what the vendored MLXLTX2 / ltx-features copies sync from.
         self.assertEqual(ar.to_ltx_v2(load("registry.json")), load("dist/registry.v2.json"),
@@ -47,18 +57,6 @@ class Registries(unittest.TestCase):
             with self.subTest(rel):
                 old = load(rel)
                 self.assertEqual(back(conv(old)), old)
-
-    def test_example_conversion_is_reproducible(self):
-        # The example is the fixture converted and then pinned; pinning only fills source and the
-        # licence url/notice.
-        converted = ar.from_klein_v1(load("tests/fixtures/klein-v1-2026-10-19.json"))
-        example = load("examples/flux2-klein-4b.json")
-        for a, b in zip(converted["adapters"], example["adapters"]):
-            strip = lambda e: {k: v for k, v in e.items() if k not in ("source", "licenseTerms")}  # noqa: E731
-            self.assertEqual(strip(a), strip(b))
-            self.assertEqual({k: v for k, v in b["source"].items()
-                              if k in ("host", "repo", "file", "upstream")},
-                             {k: v for k, v in a["source"].items() if k != "gated"})
 
     def test_gated_sources_are_the_only_local_hashes(self):
         for rel in REGISTRIES:
@@ -104,6 +102,54 @@ class DescriptorShape(unittest.TestCase):
                         self.assertTrue(r["min"] <= a["defaultStrength"] <= r["max"])
                     if "footprint" in a:
                         self.assertGreaterEqual(a["footprint"]["activationMultiplier"], 1)
+
+
+class SafetensorsExtent(unittest.TestCase):
+    """The header check behind `validate --remote` and `pin` (AB-T-0217: a pinned file 30 tensors
+    short passed every size and hash check, because the bad file was the one pinned)."""
+
+    @staticmethod
+    def _file(n_tensors=3, tensor_bytes=16):
+        header = {"__metadata__": {"format": "pt"}}
+        for i in range(n_tensors):
+            header[f"t{i}.lora_A.weight"] = {"dtype": "F32", "shape": [2, 2],
+                                             "data_offsets": [i * tensor_bytes, (i + 1) * tensor_bytes]}
+        raw = json.dumps(header).encode()
+        return struct.pack("<Q", len(raw)) + raw + bytes(n_tensors * tensor_bytes)
+
+    def _extent(self, blob):
+        return ar.safetensors_extent(lambda off, n: blob[off:off + n])
+
+    def test_complete_file(self):
+        blob = self._file()
+        self.assertEqual(self._extent(blob), len(blob))
+
+    def test_truncated_file_reports_the_size_it_needs(self):
+        blob = self._file()
+        self.assertGreater(self._extent(blob[:-20]), len(blob[:-20]))
+
+    def test_header_past_eof(self):
+        with self.assertRaises(ValueError):
+            self._extent(self._file()[:12])
+
+    def test_extent_problem_flags_truncation(self):
+        blob = self._file()
+        short = blob[:-20]
+
+        class FakeHub:
+            def reader(self, repo, revision, path):
+                return lambda off, n: short[off:off + n]
+
+        adapter = {"source": {"repo": "o/r", "revision": "0" * 40, "file": "f.safetensors", "bytes": len(short)}}
+        err, note = ar._extent_problem(adapter, FakeHub(), ())
+        self.assertIn("truncated", err)
+        adapter["source"]["bytes"] = len(blob)
+
+        class GoodHub:
+            def reader(self, repo, revision, path):
+                return lambda off, n: blob[off:off + n]
+
+        self.assertEqual(ar._extent_problem(adapter, GoodHub(), ()), (None, None))
 
 
 class GroupRules(unittest.TestCase):
@@ -179,6 +225,15 @@ POISON = [
                                               _plain(d)["licenseTerms"].pop("notice", None)), "needs a notice"),
     ("local hash on a public repo", lambda d: _plain(d)["source"].update(hashFrom="local"), "only a gated source"),
     ("unknown placeholder", lambda d: _plain(d).update(promptTemplate="{subject} walks"), "placeholder"),
+    ("withdrawn id still offered", lambda d: d.update(withdrawn=[{"id": "transition", "title": "x", "reason": "bad bytes",
+                                                                "date": "2026-10-19"}]), "both offered"),
+    ("withdrawn without a reason", lambda d: d.update(withdrawn=[{"id": "gone", "title": "x", "date": "2026-10-19"}]),
+     "missing required 'reason'"),
+    ("withdrawn twice", lambda d: d.update(withdrawn=[{"id": "gone", "title": "x", "reason": "r", "date": "2026-10-19"}] * 2),
+     "withdrawn: id 'gone' appears 2 times"),
+    ("withdrawn with an unpinned source", lambda d: d.update(withdrawn=[{
+        "id": "gone", "title": "x", "reason": "r", "date": "2026-10-19",
+        "source": dict(_plain(d)["source"], revision="main")}]), "revision"),
     ("references without describable",
      lambda d: [s.pop("describable", None) for s in _ingredients(d)["conditioning"]], "no slot is describable"),
 ]

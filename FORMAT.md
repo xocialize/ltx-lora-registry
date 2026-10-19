@@ -1,4 +1,4 @@
-# Adapter registry format 3
+# Adapter registry format 3 (3.1)
 
 One curated adapter (LoRA) registry format for image and video packages (AB-D-0155, AB-A-0193). It
 merges ltx-lora-registry v2 with FLUX.2 Klein's registry. Packages, the runtime adapter catalog
@@ -13,15 +13,18 @@ evidence, and the source's provenance flags.
   (JSON Schema 2020-12).
 - **Validator and converters:** [`tools/adapter_registry.py`](tools/adapter_registry.py) (Python
   standard library only).
-- **Registries in this format:** [`registry.json`](registry.json) (LTX-2, namespace `ltx`) and
-  [`examples/flux2-klein-4b.json`](examples/flux2-klein-4b.json) (FLUX.2 Klein, converted; mlx-image
-  owns that data).
+- **Registries in this format:**
+  - [`registry.json`](registry.json) (LTX-2, namespace `ltx`), here.
+  - FLUX.2 Klein (namespace `flux2-klein`): `registry/flux2-klein-4b.json` in
+    [`xocialize/flux2-klein-swift`](https://github.com/xocialize/flux2-klein-swift) (from `daf967d`),
+    owned by mlx-image.
+  - Each registry lives with its package's owners; this repo holds the format.
 
-Status: 3.0, 2026-10-19. The engine-facing names are the ones shipped in contract 1.53.0
+Status: 3.1, 2026-10-19. The engine-facing names are the ones shipped in contract 1.53.0
 (mlx-engine-swift v0.68.0). Contract 1.55.0 (v0.70.0) added `conditioningGroups` in this format's
-shape and enforces it in the pre-flight. Both registries here decode against v0.70.0: 18/18 entries,
-with the Ingredients group cases refused and admitted as specified. If the contract renames a field,
-the registry follows as a 3.x minor change, noted in the changelog.
+shape and enforces it in the pre-flight. The LTX and Klein registries decode against v0.70.0 (18/18
+entries at the time), with the Ingredients group cases refused and admitted as specified (AB-R-0592).
+If the contract renames a field, the registry follows as a 3.x minor change, noted in the changelog.
 
 ## Versioning
 
@@ -41,7 +44,8 @@ the registry follows as a 3.x minor change, noted in the changelog.
   "namespace": "ltx",
   "title": "LTX-2 adapters",
   "description": "…",
-  "adapters": [ … ]
+  "adapters": [ … ],
+  "withdrawn": [ … ]
 }
 ```
 
@@ -50,6 +54,32 @@ the registry follows as a 3.x minor change, noted in the changelog.
 | `format` | Always `"adapter-registry"`. |
 | `namespace` | Slug naming this registry. An adapter's **qualified id** is `<namespace>:<id>`, e.g. `ltx:ingredients`, `flux2-klein:tryon`. Generic ids (`outpaint`, `object-remove`) will collide once more families join. So a catalog that merges registries should register each adapter under its qualified id, which is what `AdapterRef.id` then names. |
 | `adapters` | The entries, in display order. |
+| `withdrawn` | 3.1, optional. See [Withdrawn entries](#withdrawn-entries). |
+
+### Withdrawn entries
+
+`withdrawn` holds entries taken out of service, kept for the record. It is for an adapter that must
+not be offered, such as one whose pinned bytes are known bad:
+
+```json
+"withdrawn": [
+  {"id": "object-remove", "title": "Object Removal",
+   "reason": "The pinned file is truncated upstream: its header needs 76,039,072 bytes, the file has 58,441,728.",
+   "date": "2026-10-19", "tracking": "AB-T-0217",
+   "source": { …the withdrawn pin… }}
+]
+```
+
+- **Hosts never register, offer or cache a withdrawn entry.** A cached file whose `sha256` matches a
+  withdrawn `source` should be evicted.
+- **Why a separate array, not a `status` value.** A runtime catalog decodes `adapters` as
+  `[AdapterDescriptor]`, which carries no status. A known-bad entry kept in `adapters` would register
+  the moment a loader forgot to filter on status. Outside `adapters`, nothing that reads only the
+  engine's fields can reach it, so the format fails closed.
+- **Fields:** `id` (not reused in `adapters` while withdrawn), `title`, `reason`, `date`, and
+  optionally `tracking` (the record that will reinstate or retire it) and `source` (the withdrawn pin,
+  so caches can purge exactly those bytes).
+- **Reinstating.** Move the entry back to `adapters` with a new pin.
 
 ## Entry
 
@@ -247,9 +277,10 @@ These are parameters a family's package reads. Adding a key is a 3.x minor chang
 ## Checks
 
 ```bash
-python3 -I tools/adapter_registry.py validate registry.json examples/*.json
-python3 -I tools/adapter_registry.py validate --remote registry.json
+python3 -I tools/adapter_registry.py validate registry.json
+python3 -I tools/adapter_registry.py validate --remote registry.json --local-dir <verified copies>
 python3 -I tests/test_adapter_registry.py
+ADAPTER_REGISTRIES=<path/to/other-registry.json> python3 -I tests/test_adapter_registry.py
 ```
 
 **`validate`** checks two things:
@@ -257,7 +288,7 @@ python3 -I tests/test_adapter_registry.py
   keyword it does not implement, so the two can't drift. The tests check it against the
   `jsonschema` package when that package is installed.
 - **Rules the schema can't express:**
-  - unique ids and roles;
+  - unique ids and roles, and no id both offered and withdrawn;
   - slots exactly for `ic`;
   - groups are consistent;
   - a clearance for every base model;
@@ -273,7 +304,14 @@ only with our token isn't reachable for users (AB-L-0055). It checks that:
 - the repo isn't renamed;
 - the file exists at the pinned commit;
 - the size and sha256 match;
-- gating is as recorded.
+- gating is as recorded;
+- **the safetensors header fits the file.** It reads the header with two HTTP range requests and
+  checks that the furthest tensor ends exactly at `bytes`.
+  - This catches a truncated upload that size and hash can't, because the bad file is the one that
+    was pinned. Klein's `object-remove` passed every other check while 30 of its 136 tensors lay past
+    EOF (AB-T-0217), and some loaders read past EOF without complaint.
+  - On a gated repo, without a token, it checks a size-matched copy from `--local-dir`, or notes that
+    it couldn't check.
 
 Run it before a release and after any source change. It needs the network, so it isn't in the
 offline tests.
@@ -285,7 +323,7 @@ offline tests.
 - it fills `format` and `weights` from a local copy's header;
 - it links the repo's own LICENSE and NOTICE files.
 
-It refuses a repo that now resolves under another name.
+It refuses a repo that now resolves under another name, and a file whose header doesn't fit it.
 
 ## From the legacy registries
 
@@ -342,6 +380,9 @@ Legacy licence ids:
 
 ## Changelog
 
+- **3.1** (2026-10-19): the optional top-level `withdrawn` array. `validate --remote` and `pin` also
+  check that the safetensors header fits the file. No change to `adapters`, so 3.0 files are valid
+  3.1.
 - **3.0** (2026-10-19): first release. It merges ltx-lora-registry v2 and Klein v1. Entries decode as
   `AdapterDescriptor` (contract 1.53.0; groups enforced from 1.55.0). Adds pinned sources, typed licence
   terms, per-base clearance, structured groups, base-model inputs, and namespaces.

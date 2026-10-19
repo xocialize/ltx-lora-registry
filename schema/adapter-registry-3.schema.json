@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/xocialize/ltx-lora-registry/main/schema/adapter-registry-3.schema.json",
-  "title": "Adapter registry, format 3",
+  "title": "Adapter registry, format 3.1",
   "description": "One curated adapter (LoRA) registry format for image and video packages. Spec: FORMAT.md. Each entry is a superset of MLXToolKit's AdapterDescriptor (contract 1.53.0; conditioningGroups from 1.55.0) and decodes as one. This schema is the authoring contract and is strict; readers must ignore unknown keys so later 3.x additions stay readable.",
   "type": "object",
   "required": ["format", "schemaVersion", "namespace", "title", "adapters"],
@@ -16,7 +16,12 @@
     },
     "title": { "type": "string", "minLength": 1 },
     "description": { "type": "string" },
-    "adapters": { "type": "array", "items": { "$ref": "#/$defs/adapter" } }
+    "adapters": { "type": "array", "items": { "$ref": "#/$defs/adapter" } },
+    "withdrawn": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/withdrawal" },
+      "description": "3.1: entries taken out of service, kept for the record. Hosts never register, offer or cache them; a cached file whose sha256 matches a withdrawn source should be evicted. Kept out of `adapters` so a loader that decodes `adapters` as [AdapterDescriptor] cannot register one by forgetting a filter."
+    }
   },
   "$defs": {
     "slug": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
@@ -125,6 +130,19 @@
             "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
           }
         }
+      }
+    },
+    "withdrawal": {
+      "type": "object",
+      "required": ["id", "title", "reason", "date"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/slug", "description": "The id it had in `adapters`; not reused there while withdrawn." },
+        "title": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1, "description": "Why it is out of service, e.g. the pinned bytes are known bad." },
+        "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "tracking": { "type": "string", "minLength": 1, "description": "The record that will reinstate or retire it, e.g. AB-T-0217." },
+        "source": { "$ref": "#/$defs/source", "description": "The withdrawn pin, so caches can purge exactly those bytes." }
       }
     },
     "clearance": {

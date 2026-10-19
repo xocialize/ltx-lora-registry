@@ -164,6 +164,12 @@ def semantic_errors(doc):
     for dup, n in ids.items():
         if n > 1:
             out.append(f"adapters: id '{dup}' appears {n} times")
+    gone = collections.Counter(w.get("id") for w in doc.get("withdrawn", []))
+    for dup, n in gone.items():
+        if n > 1:
+            out.append(f"withdrawn: id '{dup}' appears {n} times")
+    for both in sorted(set(ids) & set(gone)):
+        out.append(f"id '{both}' is both offered (adapters) and withdrawn")
     for i, a in enumerate(doc.get("adapters", [])):
         where = f"adapters[{i}] ({a.get('id')})"
         slots = a.get("conditioning", [])
@@ -300,15 +306,82 @@ class Hub:
         status, rows = self._request(url)
         return status, rows if isinstance(rows, list) else None
 
+    def reader(self, repo, revision, path):
+        """`read_at(offset, length)` over the file at a pinned revision, by HTTP range request. Raises
+        `urllib.error.HTTPError` (401 on a gated repo without a token)."""
+        url = f"{HUB}/{repo}/resolve/{revision}/{urllib.parse.quote(path)}"
+
+        def read_at(offset, length):
+            headers = {"User-Agent": "adapter-registry/3", "Range": f"bytes={offset}-{offset + length - 1}"}
+            if self.token:
+                headers["Authorization"] = f"Bearer {self.token}"
+            with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=60) as r:
+                if r.status == 206:
+                    return r.read(length)
+                # A server that ignores Range sends the whole file: read only the prefix we need.
+                return r.read(offset + length)[offset:]
+        return read_at
+
 
 def _hub_oid(row):
     oid = ((row or {}).get("lfs") or {}).get("oid")
     return oid if oid and re.fullmatch(r"[0-9a-f]{64}", oid) else None
 
 
-def remote_errors(doc, hub):
+def safetensors_extent(read_at):
+    """The size a safetensors file must have: the 8-byte length, the header, and the furthest
+    tensor's end offset. A file shorter than this is truncated, and some loaders read past EOF
+    without complaint (mlx-swift 0.31.6 did, AB-T-0217); `sha256` and size alone cannot see it
+    when the bad file is the one that was pinned."""
+    head = read_at(0, 8)
+    if len(head) != 8:
+        raise ValueError("shorter than the 8-byte header length")
+    n = struct.unpack("<Q", head)[0]
+    if n > 100_000_000:
+        raise ValueError(f"implausible header length {n}")
+    raw = read_at(8, n)
+    if len(raw) != n:
+        raise ValueError("the header runs past the end of the file")
+    header = json.loads(raw)
+    header.pop("__metadata__", None)
+    return 8 + n + max((v["data_offsets"][1] for v in header.values()), default=0)
+
+
+def _file_reader(path):
+    def read_at(offset, length):
+        with open(path, "rb") as f:
+            f.seek(offset)
+            return f.read(length)
+    return read_at
+
+
+def _extent_problem(adapter, hub, local_dirs):
+    """(error, note) for the header check: the hub copy by range request, else (gated, no token)
+    a size-matched local copy, else a note that it could not be checked."""
+    src = adapter["source"]
+    try:
+        extent = safetensors_extent(hub.reader(src["repo"], src["revision"], src["file"]))
+        where = "hub"
+    except urllib.error.HTTPError as e:
+        local = _local_copy(adapter, local_dirs, src["bytes"])
+        if local is None:
+            return None, f"header not checked: hub range read HTTP {e.code} and no local copy"
+        try:
+            extent, where = safetensors_extent(_file_reader(local)), "local copy"
+        except ValueError as v:
+            return f"local copy is not a valid safetensors file: {v}", None
+    except ValueError as v:
+        return f"not a valid safetensors file: {v}", None
+    if extent != src["bytes"]:
+        verdict = "truncated" if extent > src["bytes"] else "trailing bytes"
+        return f"{verdict}: the header ({where}) needs {extent} bytes but the file is {src['bytes']}", None
+    return None, None
+
+
+def remote_errors(doc, hub, local_dirs=()):
     """Check every pinned source against the hub: repo not renamed, file present at the pinned
-    commit, size and sha256 equal, gating as recorded."""
+    commit, size and sha256 equal, gating as recorded, and the safetensors header's extent equal to
+    the file's size."""
     out, notes = [], []
     for a in doc.get("adapters", []):
         src, where = a["source"], f"{a['id']} ({a['source']['repo']})"
@@ -338,6 +411,11 @@ def remote_errors(doc, hub):
             out.append(f"{where}: hub sha256 {oid[:16]}… != recorded {src['sha256'][:16]}…")
         elif src["hashFrom"] == "local":
             notes.append(f"{where}: hub oid now readable and equal; hashFrom can become 'hub'")
+        err, note = _extent_problem(a, hub, local_dirs)
+        if err:
+            out.append(f"{where}: {err}")
+        if note:
+            notes.append(f"{where}: {note}")
     return out, notes
 
 
@@ -392,6 +470,11 @@ def pin_adapter(adapter, hub, local_dirs, log=print):
         log(f"  {adapter['id']}: hub oid masked; hashed local {local}")
     src.update(revision=rev, sha256=sha, bytes=size, hashFrom=origin,
                gated=info.get("gated") not in (False, None))
+    err, note = _extent_problem(adapter, hub, local_dirs)
+    if err:
+        raise RuntimeError(f"{adapter['id']}: refusing to pin {src['repo']}/{src['file']}: {err}")
+    if note:
+        log(f"  {adapter['id']}: {note}")
     lic = adapter.get("licenseTerms")
     if lic is not None and ("url" not in lic or "notice" not in lic):
         status, rows = hub.tree(src["repo"], rev)
@@ -718,7 +801,8 @@ def canonical(doc):
     """Format 3 in a stable key order: AdapterDescriptor's fields first, then the registry's own."""
     if doc.get("format") != "adapter-registry":
         return doc
-    out = _ordered(doc, ["$schema", "format", "schemaVersion", "namespace", "title", "description", "adapters"])
+    out = _ordered(doc, ["$schema", "format", "schemaVersion", "namespace", "title", "description", "adapters",
+                         "withdrawn"])
     out["adapters"] = []
     for a in doc["adapters"]:
         a = _ordered(a, _ENTRY_ORDER)
@@ -776,7 +860,7 @@ def cmd_validate(args):
         errs = validate_doc(doc, schema)
         notes = []
         if hub and not errs:
-            remote, notes = remote_errors(doc, hub)
+            remote, notes = remote_errors(doc, hub, args.local_dir)
             errs += remote
         for n in notes + (semantic_warnings(doc) if not errs else []):
             print(f"note  {path}: {n}")
@@ -838,6 +922,8 @@ def main(argv=None):
     v.add_argument("files", nargs="+")
     v.add_argument("--remote", action="store_true")
     v.add_argument("--token-file", help="HF token file, for gated repos (default: unauthenticated)")
+    v.add_argument("--local-dir", action="append", default=[],
+                   help="verified copies, for the header check of gated repos read without a token")
     v.set_defaults(func=cmd_validate)
 
     pn = sub.add_parser("pin", help="resolve revisions to commits and record sha256 + bytes")
