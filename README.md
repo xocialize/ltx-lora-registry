@@ -8,7 +8,8 @@ Two things live here:
    and [`tools/adapter_registry.py`](tools/adapter_registry.py) for the validator, pinning and
    converters.
    - It merges this repo's v2 schema with FLUX.2 Klein's registry.
-   - Every entry decodes as the engine's `AdapterDescriptor` (contract 1.53.0, AB-A-0189).
+   - Every entry decodes as the engine's `AdapterDescriptor` (contract 1.53.0, AB-A-0189). From
+     contract 1.55.0 (mlx-engine-swift v0.70.0) the engine also enforces `conditioningGroups`.
 2. **The LTX-2 adapter registry**: [`registry.json`](registry.json) (namespace `ltx`). It is the source
    of truth for the adapters `MLXLTX2` and `ltx-features-swift` offer, and it is already in format 3.
 

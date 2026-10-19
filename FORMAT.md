@@ -4,8 +4,8 @@ One curated adapter (LoRA) registry format for image and video packages (AB-D-01
 merges ltx-lora-registry v2 with FLUX.2 Klein's registry. Packages, the runtime adapter catalog
 (mlx-image-runtime), the media engines and their consoles read it.
 
-**Every entry is a superset of `MLXToolKit.AdapterDescriptor`** (contract 1.53.0, AB-A-0189) and
-decodes as one. The runtime catalog can hand the engine a registry's `adapters` array with no mapping
+**Every entry is a superset of `MLXToolKit.AdapterDescriptor`** (contract 1.53.0, AB-A-0189;
+mlx-engine-swift v0.68.0) and decodes as one. The runtime catalog can hand the engine a registry's `adapters` array with no mapping
 layer. The registry adds what the engine doesn't need: status, clearance, prompting, licence terms,
 evidence, and the source's provenance flags.
 
@@ -17,9 +17,11 @@ evidence, and the source's provenance flags.
   [`examples/flux2-klein-4b.json`](examples/flux2-klein-4b.json) (FLUX.2 Klein, converted; mlx-image
   owns that data).
 
-Status: 3.0, 2026-10-19. The engine-facing names follow mlx-engine's contract 1.53.0 draft. If that
-contract renames a field before it ships, the registry follows as a 3.x minor change, noted in the
-changelog.
+Status: 3.0, 2026-10-19. The engine-facing names are the ones shipped in contract 1.53.0
+(mlx-engine-swift v0.68.0). Contract 1.55.0 (v0.70.0) added `conditioningGroups` in this format's
+shape and enforces it in the pre-flight. Both registries here decode against v0.70.0: 18/18 entries,
+with the Ingredients group cases refused and admitted as specified. If the contract renames a field,
+the registry follows as a 3.x minor change, noted in the changelog.
 
 ## Versioning
 
@@ -149,8 +151,12 @@ These fields are the registry's own:
   - `exactlyOne` means one alternative is satisfied; `required` means the request must satisfy the
     group.
   - Grouped slots are `required: false`; the group decides.
-  - `AdapterDescriptor` has no notion of groups (contract 1.53.0 draft). Until it does, the package
-    or host enforces them; otherwise an Ingredients request with no sheet passes pre-flight.
+  - **The engine enforces groups from contract 1.55.0** (mlx-engine-swift v0.70.0;
+    `AdapterDescriptor.conditioningGroups`, same shape). Its pre-flight refuses a required group with
+    nothing bound (Ingredients with no sheet) and bound roles that match no alternative, or more than
+    one. It registers only `exactlyOne`. The slot-level `group` key is registry-only: the engine
+    derives membership from the alternatives, so the two must agree (`validate` checks it).
+  - Against an engine older than 1.55.0, the package or host must enforce groups itself.
 
 ### Prompting
 
@@ -320,13 +326,13 @@ Legacy licence ids:
 | `unspecified-community` | `NOASSERTION` | unknown |
 | `research-only-noncommercial` | `LicenseRef-research-only-noncommercial` | prohibited |
 
-## How the engine uses it (contract 1.53.0 draft, AB-A-0189)
+## How the engine uses it (contracts 1.53.0 and 1.55.0, AB-A-0189)
 
 - **Requests.** A request carries `AdapterRef {id, strength?, conditioning}`. The engine looks the id
   up in its catalog (`AdapterDescriptor`s, i.e. registry entries), then:
   - fits it against the surface's `AdapterSupport` (`capabilities`, `baseModels`, `kind`, `format`,
     strength ranges);
-  - orders the conditioning into the slots;
+  - orders the conditioning into the slots and checks the groups (1.55.0);
   - materialises `source` at the pinned revision, checks its `sha256`, and uses a token from the host's
     store when `source.gated`.
 - **Admission.** It charges `footprint` (or `source.bytes`) and the largest `activationMultiplier`.
@@ -337,5 +343,5 @@ Legacy licence ids:
 ## Changelog
 
 - **3.0** (2026-10-19): first release. It merges ltx-lora-registry v2 and Klein v1. Entries decode as
-  `AdapterDescriptor` (contract 1.53.0 draft). Adds pinned sources, typed licence terms, per-base
-  clearance, structured groups, base-model inputs, and namespaces.
+  `AdapterDescriptor` (contract 1.53.0; groups enforced from 1.55.0). Adds pinned sources, typed licence
+  terms, per-base clearance, structured groups, base-model inputs, and namespaces.
