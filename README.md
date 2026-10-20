@@ -26,7 +26,7 @@ per-adapter pipeline code.
 | `registry.json` | LTX-2 adapters, format 3, every source pinned to a commit and a sha256. |
 | `dist/registry.v2.json` | `registry.json` projected onto v2, for the vendored copies whose decoders haven't moved (see below). Generated; the tests fail if it is stale. |
 | `tools/adapter_registry.py` | `validate [--remote]`, `pin`, `convert ltx-v2|klein-v1`, `export ltx-v2|klein-v1`. Standard library only. |
-| `tools/migrations/` | Dated data changes, each next to its reason: the v2 → 3 migration, then the measured IC footprints. |
+| `tools/migrations/` | Dated data changes, each next to its reason: the v2 → 3 migration, the measured IC footprints, then their re-measure after the encode fix. |
 | `tests/` | Offline tests: schema, rules, poison cases, the safetensors header check, the `AdapterDescriptor` shape, legacy round-trips (LTX v2 and Klein v1 fixtures), projection freshness. Set `ADAPTER_REGISTRIES` to check other format-3 files too. |
 
 ```bash
@@ -60,23 +60,23 @@ All ten sources are pinned.
 | i2v-adapter | plain | verified | perceptual | mechanical | NOASSERTION | rank 256; built for the base model's init image (`baseInputs`) |
 | product-ad | plain | verified | perceptual | mechanical | LTX-2 Community | rank 16, audio branch |
 | sci-fi-cinema | plain | verified | perceptual | mechanical | LTX-2 Community | rank 16, audio branch; trigger `srx_scififilm` (card typo `srx_scifilm`) |
-| lipdub | ic | verified | perceptual | mechanical | LTX-2 Community | **repo renamed upstream to `…-DubIt`** (see below); footprint ×2.42 activation |
-| ingredients | ic | verified | perceptual | **perceptual** | LTX-2 Community | live IC fixture passed on 2.5 (2026-09-02); footprint ×2.37 activation |
-| union-control | ic | gate-verified | perceptual (canny) | mechanical | LTX-2 Community | pose and depth fixtures owed (AB-T-0007); hub no longer gated; footprint ×1.48 activation |
-| cameraman-v2 | ic | eval-only | perceptual | — | research only | licence-gated forever; footprint ×2.42 activation |
+| lipdub | ic | verified | perceptual | mechanical | LTX-2 Community | **repo renamed upstream to `…-DubIt`** (see below); footprint ×1.54 activation |
+| ingredients | ic | verified | perceptual | **perceptual** | LTX-2 Community | live IC fixture passed on 2.5 (2026-09-02); footprint ×1.48 activation |
+| union-control | ic | gate-verified | perceptual (canny) | mechanical | LTX-2 Community | pose and depth fixtures owed (AB-T-0007); hub no longer gated; footprint ×1.49 activation |
+| cameraman-v2 | ic | eval-only | perceptual | — | research only | licence-gated forever; footprint ×1.48 activation |
 
 **IC footprints.** The engine registers an `ic` adapter only with a measured
-`footprint.activationMultiplier`. All four IC adapters carry one (AB-R-0597,
-`tools/migrations/2026-10-19-ic-footprints.py`).
+`footprint.activationMultiplier`. All four IC adapters carry one (AB-R-0598,
+`tools/migrations/2026-10-19-ic-remeasured-footprints.py`).
 - **Method:** `--ic-spot25 768 448 121`, LTX-2.5 bf16, seed 42, each adapter against the same
-  harness's no-adapter control arm, all on one binary (ltx-2-mlx-swift 8704ef3). The control arm's
-  activation was 24.71 GB on both of its runs.
-- **Multipliers:** LipDub ×2.42, Ingredients ×2.37, Cameraman ×2.42, Union-Control ×1.48. Union-Control
-  encodes its reference at half resolution (`referenceDownscale 2`).
-- **Ingredients was ×1.64** (AB-R-0591, a 2026-09-02 build). The same arm now reads 58.42 GB of
-  activation instead of 39.06 GB. The peak has moved into the reference VAE encode, whose conv path
-  changed in ltx-2-mlx-swift 79b5814 (mlx-swift 0.32.3 and ExactConv). Re-measure all four if the
-  port fixes that encode.
+  harness's no-adapter control arm, on ltx-2-mlx-swift 0067a19. Two runs per adapter, three of the
+  control. Multiplier = the larger IC reading / the smallest control reading (24.57 GB), rounded up.
+- **Multipliers:** LipDub ×1.54, Ingredients ×1.48, Cameraman ×1.48, Union-Control ×1.49. Each run's
+  peak is now the decode.
+- **History.** AB-R-0597 (the same day, ltx-2-mlx-swift 8704ef3) declared ×2.42 / ×2.37 / ×2.42 /
+  ×1.48. Those numbers measured the reference VAE encode: from 79b5814 (mlx-swift 0.32.3 + ExactConv)
+  its padded copies filled an uncapped mlx pool. 0067a19 fixed the encode without changing its values
+  (AB-T-0338). AB-R-0591's ×1.64 (2026-09-02) was encode-bound as well.
 
 **Deliberate data changes in the migration** (`tools/migrations/2026-10-19-v2-to-v3.py`):
 - **LipDub → DubIt.** On 2026-08-02 Lightricks renamed both the repo
