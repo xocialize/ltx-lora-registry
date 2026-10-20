@@ -365,6 +365,10 @@
           "note": "the new audio to lip-sync; defaults to the reference video's own audio track"
         }
       ],
+      "footprint": {
+        "residentBytes": 2466665072,
+        "activationMultiplier": 2.42
+      },
       "status": "verified",
       "clearance": {
         "ltx-2.3": {
@@ -402,7 +406,8 @@
           "ditq8": "ON 0.953021 / detach 1.000000 (runs 2,3; run 1 was a q8 non-self-repeat: detach 0.991174 — the guard now reports that INCONCLUSIVE)",
           "bf16": "ON 0.953375 / detach 1.000000",
           "liveIC": "not run on 2.5 — mechanical clear only; the dub path was live-verified on 2.3"
-        }
+        },
+        "footprint": "AB-R-0597: --ic-spot25, LTX-2.5 bf16, 768x448x121, seed 42, 2026-10-19, ltx-2-mlx-swift 8704ef3: activation 59.77 GB with the adapter and a 768x448x121 talking-face clip (lipdub-ref-talking-photoreal) whose own 5.0 s audio track is the dub, the longest audio reference the span admits, vs 24.71 GB for the same harness's no-adapter control arm on the same binary = 2.419, declared 2.42. Its reference has cameraman-v2's shape (768x448x121), whose phys-trace puts the peak in the reference VAE encode. One geometry; the package runs IC one stage at target resolution whatever runtime.stage2 says. residentBytes = the bf16 file, which the DiT's low-rank add keeps as loaded."
       }
     },
     {
@@ -487,7 +492,7 @@
       },
       "footprint": {
         "residentBytes": 1308778338,
-        "activationMultiplier": 1.64
+        "activationMultiplier": 2.37
       },
       "status": "verified",
       "clearance": {
@@ -530,7 +535,7 @@
           "bf16": "ON 0.947564 / detach 1.000000",
           "liveIC": "IC-P3-FIXTURE PASS on 2.5 2026-09-02 (--ic-spot25 768x448x121 seed42 bf16 Unconstrained, ModelSheet bundle sheet + elements): identity transfer STRONG (silver hair / navy high-collar suit / crimson stripe / harness), one coherent rooftop scene (no layout bleed), no sheet-text bleed, audio live (mean -18.4 dBFS); run 365.5 s, peak 77.35 / held 38.29 / act 39.06 GB (2.3 P3: 434 s, 79.58 / 39.39). Artifact: LTX_TESTING/fixtures/ic25-ingredients-bf16-768x448-121f-s42.mp4"
         },
-        "footprint": "AB-R-0591: --ic-spot25, LTX-2.5 bf16, 768x448x121, seed 42, 2026-09-02: activation 39.06 GB with the adapter and its looped-still reference vs 23.91 GB for the same harness's no-adapter control arm = 1.634, declared 1.64. One geometry; the growth is the reference tokens (referenceDownscale 1, one reference the size of the target). residentBytes = the bf16 file, which the DiT's low-rank add keeps as loaded."
+        "footprint": "AB-R-0597: --ic-spot25, LTX-2.5 bf16, 768x448x121, seed 42, 2026-10-19, ltx-2-mlx-swift 8704ef3: activation 58.42 GB with the adapter and the Tactical looped-still sheet (the AB-R-0591 reference), vs 24.71 GB for the same harness's no-adapter control arm on the same binary = 2.364, declared 2.37. Its reference has cameraman-v2's shape (768x448x121), whose phys-trace puts the peak in the reference VAE encode. Supersedes AB-R-0591's x1.64 (act 39.06 GB on the 2026-09-02 build). One geometry; the package runs IC one stage at target resolution whatever runtime.stage2 says. residentBytes = the bf16 file, which the DiT's low-rank add keeps as loaded."
       }
     },
     {
@@ -573,6 +578,10 @@
           "note": "extracted control-signal clip — pose skeleton render, depth map, or canny edges; the active signal is chosen by WHICH extraction you feed (union adapter accepts all three). Reference runs at 0.5x output resolution (referenceDownscale 2 — embedded in the checkpoint metadata)."
         }
       ],
+      "footprint": {
+        "residentBytes": 654465352,
+        "activationMultiplier": 1.48
+      },
       "status": "gate-verified",
       "clearance": {
         "ltx-2.3": {
@@ -611,7 +620,8 @@
           "targetsResolved": "480/480 (same count as 2.3)",
           "ditq8": "ON 0.910594 / detach 1.000000",
           "liveIC": "not run on 2.5 — mechanical clear only; the control-video path was live-verified on 2.3"
-        }
+        },
+        "footprint": "AB-R-0597: --ic-spot25, LTX-2.5 bf16, 768x448x121, seed 42, 2026-10-19, ltx-2-mlx-swift 8704ef3: activation 36.50 GB with the adapter and the canny control clip (union-canny/canny_control.mp4) ingested at 384x224 (referenceDownscale 2), vs 24.71 GB for the same harness's no-adapter control arm on the same binary = 1.477, declared 1.48. Its reference is encoded at a quarter of the pixels; which phase sets its peak was not traced. One geometry; the package runs IC one stage at target resolution whatever runtime.stage2 says. residentBytes = the bf16 file, which the DiT's low-rank add keeps as loaded."
       }
     },
     {
@@ -653,6 +663,10 @@
           "note": "raw video carrying the desired camera motion — NO extractor; >=960x512 recommended for reliable transfer"
         }
       ],
+      "footprint": {
+        "residentBytes": 654443424,
+        "activationMultiplier": 2.42
+      },
       "status": "eval-only",
       "clearance": {
         "ltx-2.3": {
@@ -683,7 +697,8 @@
         "targetsApplied": "480/480",
         "audioBranch": false,
         "loraGate": "PASS (on 0.786/off 0.99991/detach 1.0, finite)",
-        "functionalEval": "PASS 2026-07-03 (int4 768x448x121, video-clip reference via LTX_IC_TEST): camera tracking arc TRANSFERRED to a different prompt scene, coherent + prompt-adherent. SPLIT floor 12.23 / act 26.36 / peak 38.59 GB, run 72s warm. NOT card-faithful (ref below the >=960x512 rec; skip one-stage eval config vs declared clean) — quality pass pending a compliant reference. Status stays eval-only (license)."
+        "functionalEval": "PASS 2026-07-03 (int4 768x448x121, video-clip reference via LTX_IC_TEST): camera tracking arc TRANSFERRED to a different prompt scene, coherent + prompt-adherent. SPLIT floor 12.23 / act 26.36 / peak 38.59 GB, run 72s warm. NOT card-faithful (ref below the >=960x512 rec; skip one-stage eval config vs declared clean) — quality pass pending a compliant reference. Status stays eval-only (license).",
+        "footprint": "AB-R-0597: --ic-spot25, LTX-2.5 bf16, 768x448x121, seed 42, 2026-10-19, ltx-2-mlx-swift 8704ef3: activation 59.77 GB with the adapter and a 768x448x121 tracking-shot clip (59.75 and 59.77 GB on two runs), vs 24.71 GB for the same harness's no-adapter control arm on the same binary = 2.419, declared 2.42. A phys-trace of the repeat puts the peak in the reference VAE encode, before denoise. One geometry; the package runs IC one stage at target resolution whatever runtime.stage2 says. residentBytes = the bf16 file, which the DiT's low-rank add keeps as loaded."
       }
     }
   ]
